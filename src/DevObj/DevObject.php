@@ -17,32 +17,43 @@ class DevObject
 
     private $strUuid = '';
     private $rs = [];
-    private $rs_keys = [];
+    private $rs_keys = [
+        'obj_type' => '',
+        'obj_id' => '',
+        'obj_version' => '',
+    ];
     
     /**
      * Dev object constructor
-     * @param string $objUuid - Key to stored object
-     * @param string $context - Context to apply for the object 
+     * Pass any of the indexes to lookup the record.
+     *
+     * @param array $aaRec - Assoc array with dev_obj columns as keys.
      */
-    function __construct($objUuid = null, $objId= '', $objType = '', $context = '', $insert = false)
+    function __construct($aaRec = [])
     {
         // Establish connection
         $this->objDevDB = new DevDB();
 
         // Store properties
-        $this->strUuid = $objUuid;
-        $this->rs_keys['obj_id'] = $objId;
-        $this->rs_keys['obj_type'] = $objType;
-        $this->rs_keys['obj_version'] = $context;
-
-        if (!empty($objUuid)) {
-            $this->selectUuid();
-        } elseif (!empty($objId)) {
-            $this->select($insert);
+        $this->strUuid = (empty($aaRec['strUuid']) ? '' : $aaRec['strUuid']);
+        // If caller has not specified obj_type default to their class name
+        if (empty($aaRec['obj_type'])) {
+            $origClass = get_class($this);
+            if ($pos = strrpos($origClass, '\\')) {
+                $origClass = substr($origClass, $pos + 1);
+            }
+            $aaRec['obj_type'] = $origClass;
         }
 
-        // TBD - Confirm the object exists and is active in storage
-        // Remove functionality from zsfx.interface.globals.php
+        foreach ($this->rs_keys as $colName => $colValueInit) {
+            $this->rs_keys[$colName] = (empty($aaRec[$colName]) ? '' : $aaRec[$colName]);
+        }
+
+        if (!empty($this->strUuid)) {
+            $this->selectUuid();
+        } elseif ((!empty($this->rs_keys['obj_id'])) && (!empty($this->rs_keys['obj_type']))) {
+            $this->selectFirst();
+        }
     }
 
     private function selectUuid()
@@ -67,16 +78,18 @@ class DevObject
     private function selectFirst($insert = false)
     {
         // Check if the record exists
-        $this->rs = $this->objDevDB->execSql([
+        $recs = $this->objDevDB->execSql([
             'sql' => 'SELECT *,BIN_TO_UUID(uuid,1) strUuid FROM dev_obj',
             'where' => $this->rs_keys,
-            'return' => 'assoc'
+            'return' => 'array'
         ]);
-        if (($this->rs == false) && ($insert)) {
+        if (($recs == false) && ($insert)) {
             $this->strUuid = $this->insert($this->rs_keys);
             return $this->selectUuid();
+        } else {
+            $this->rs = $recs[0];
         }
-        return $this->rs;
+        return $this->rs[0];
     }
     protected function insert($aaDevObj) {
         // Get recordset
@@ -104,7 +117,7 @@ class DevObject
      */
     protected function isActive()
     {
-        return (isset($this->rs['active']) ? $this->rs['active'] : false);
+        return (isset($this->rs['active']) && ($this->rs['active'])=='1');
     }
 
     /**
@@ -123,7 +136,8 @@ class DevObject
     protected function getComponents($comp_type = null) {
         if (!$this->isActive()) return false;
 
-        $sqlWhere = [];
+        // Component object should be active as well
+        $sqlWhere = ['dt.active' => 1];
         foreach ($this->rs_keys as $dcKey => $dcValue) {
             $sqlWhere["dc.$dcKey"] = $dcValue;
         }
@@ -136,7 +150,7 @@ class DevObject
                       INNER JOIN dev_obj dt ON dc.comp_obj_id=dt.obj_id AND dc.comp_obj_version=dt.obj_version',
             'where' => $sqlWhere,
             'sfx' => 'ORDER BY dc.comp_seq',
-            'return' => 'assoc'
+            'return' => 'array',
         ]);
 
         return ($recComps);

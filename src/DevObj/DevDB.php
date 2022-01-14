@@ -21,7 +21,7 @@ class DevDB
      * 
      * @param object $objInitActs - Optional parameter calls method(s) saving additional method calls.
      */
-    function __construct($objInitActs)
+    function __construct($objInitActs = [])
     {
         // Store properties
         // TBD : Remove reliance on OpenEMR $GLOBALS 
@@ -69,6 +69,10 @@ class DevDB
      */
     function execSql($aaExec)
     {
+        if ($aaExec['debug']) {
+            var_dump($aaExec);
+            die();
+        }
         if ( (!is_array($aaExec)) || (empty($aaExec['sql'])) ) return false;
 
         if (array_key_exists('where', $aaExec)) {
@@ -79,24 +83,21 @@ class DevDB
                 'params' => false,
             ]);
         }
-        // Define defaults to make sure nothing is undefined
-        $sqlFrag = [
-            ''
-        ];
         // Construct sql to locate full record as SELECT * FROM tbl WHERE col=? AND col='
         $sqStmt = sprintf(
             '%s %s %s',
             $aaExec['sql'],
-            ($sqlFrag['params'] ? 'WHERE '.$sqlFrag['str'] : ''),
+            ($aaExec['params'] ? 'WHERE '.$aaExec['str'] : ''),
             $aaExec['sfx']
         );
 
         if (empty($aaExec['return'])) {
-            return $this->adb->execute($sqStmt, $sqlFrag['bind']);
+            return $this->adb->execute($sqStmt, $aaExec['bind']);
         } elseif ($aaExec['return'] == 'array') {
-            return $this->adb->getArray($sqStmt, $sqlFrag['bind']);
+            return $this->adb->getArray($sqStmt, $aaExec['bind']);
         } elseif ($aaExec['return'] == 'assoc') {
-            return $this->adb->getAssoc($sqStmt, $sqlFrag['bind']);
+            $this->adb->setFetchMode(ADODB_FETCH_ASSOC);
+            return $this->adb->getAssoc($sqStmt, $aaExec['bind']);
         }
 
         return false;

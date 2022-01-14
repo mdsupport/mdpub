@@ -18,17 +18,15 @@ class DevFile extends DevObject
     /**
      * File object constructor
      * @param string $strFile - Filename or URL
-     * @param string $context - Context to apply for the object
+     * @param string $obj_version - Version to apply for the object
      */
-    function __construct($strFile = null, $context = '', $insert = false)
+    function __construct($strFile = null, $obj_version = '')
     {
         // Store properties
-        $this->ws['obj_id'] = $strFile;
-        $this->ws['context'] = $context;
+        $this->ws['obj_id'] = (empty($strFile) ? $this->makeObjId($strFile) : $strFile);
+        $this->ws['obj_version'] = $obj_version;
 
-        $strFile = $this->makeObjId($strFile);
-        // printf('%s will be constructed as %s.  ', $this->ws['obj_id'], $strFile);
-        parent::__construct(null, $strFile, 'DevFile', '', $insert);
+        parent::__construct($this->ws);
 
         // TBD - Confirm the object exists and is active in storage
         // Remove functionality from zsfx.interface.globals.php
@@ -69,12 +67,35 @@ class DevFile extends DevObject
         return $str_file;
     }
 
-    public function debug()
+    // Provide access to commonly used attributes of the files
+    public function get()
     {
-        // Based on __FILE__, locate emr root
-        printf('%s will load %s', print_r($this->get(), true), print_r($this->load(), true));
+        $recFull = parent::get();
+        // Commonly needed attributes
+        $cols = ['obj_id', 'obj_version', 'obj_desc'];
+        $aaReturn = array_intersect_key($recFull, array_flip($cols));
+        return $aaReturn;
     }
 
+    public function getResources($aaFilter = [])
+    {
+        if (!property_exists($this, 'resources')) {
+            $this->resources = $this->getComponents('resource');
+        }
+        $aaResources = [];
+        if ((empty($this->resources)) || (!($this->resources))) return $aaResources;
+        foreach ($this->resources as $rowNum => $rowCols) {
+            $resDetails = json_decode($rowCols['comp_json'], true);
+            $matched = true;
+            foreach ($aaFilter['match'] as $filterKey => $filterValue) {
+                $matched = $matched && ($resDetails[$filterKey]==$filterValue);
+            }
+            if ($matched) {
+                $aaResources[$rowNum] = (empty($aaFilter['value']) ? $rowCols : $resDetails[$aaFilter['value']]);
+            }
+        }
+        return $aaResources;
+    }
     /**
      * Get effective URL for the object
      * @return string - For file or empty object types, returns URL without webserver root.<br>
@@ -104,28 +125,24 @@ class DevFile extends DevObject
     /**
      * Loads component scripts for the file
      */
-    public function load($comp_type) {
-        $rs = $this->getComponents($comp_type);
-        if (!$rs) return false;
+    public function loadDevObjs($aaFilter = []) {
+        $res = $this->getResources($aaFilter);
+        if (!$res) return false;
 
-        $retHtml = false;
-        // TBD : Remove EMR sql function. getComponents returns full records as assoc array
-        while ($recComp = sqlFetchArray($rs)) {
-            switch ($comp_type) {
-                case 'script':
-                    $retHtml .= sprintf(
-                        '<script src="%s%s" data-json=\'%s\'>',
-                        $GLOBALS['webroot'], $recComp['comp_obj_id'], $recComp['comp_json']
-                    );
-                break;
-
-                default:
-                    // For now return false : feature not implemented
-                    return false;
-                break;
+        // TBD : Refine specialized actions
+        foreach ($res as $objDevComponent) {
+            // Get component details
+            $compProperty = json_decode($objDevComponent['comp_json']);
+            if ($compProperty->type == 'require_once') {
+                // TBD : Implement absPath and relPath methods
+                require_once ($GLOBALS['fileroot'].$objDevComponent['comp_obj_id']);
+                if (property_exists($compProperty, 'fn')) {
+                    $retPrint .= call_user_func($compProperty->fn, $this);
+                }
             }
         }
-        return $retHtml;
+
+        return $retPrint;
     }
 
     /**
