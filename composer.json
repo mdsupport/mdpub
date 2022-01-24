@@ -1,0 +1,17 @@
+{
+    "name" : "mdsupport/mdpub",
+    "description" : "Changes to standard OpenEMR",
+    "keywords": ["openemr"],
+    "type": "library",
+    "license": "MIT",
+
+    "require" : {
+        "php" : ">=7.4"
+    },
+
+    "autoload" : {
+        "psr-4" : {
+            "Mdsupport\\Mdpub\\" : "src/"
+        }
+    }
+}
