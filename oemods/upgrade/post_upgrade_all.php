@@ -3,103 +3,124 @@
 /* Common post-Version upgrade (offline)
  *
  * @package OpenEMR
- * @author MD Support <rod@sunsetsystems.com>
+ * @author MD Support <mdsupport@users.sourceforge.net>
  * @link https://github.com/openemr/openemr/tree/master
  * @license https://github.com/openemr/openemr/blob/master/LICENSE GNU General Public License 3
  */
 
+function ddlColUUID($strTable='', $strCol='uuid') {
+    $adb = $GLOBALS['adodb']['db'];
+
+    // Add column if not exists
+    $aaCols = $adb->metaColumns($strTable);
+    if (!$aaCols) {
+        return "Table $strTable missing.";
+    }
+    $aSql = [];
+    if (isset($aaCols[strtoupper($strCol)])) {
+        $adoFld = $aaCols[strtoupper($strCol)];
+        if ((!($adoFld->not_null)) || (!($adoFld->has_default))) {
+            // Fix current null values (if any)
+            $aSql[] = sprintf(
+                'UPDATE `%s` SET `%s`=UNHEX(SYS_GUID()) where `%s` IS NULL;',
+                $strTable, $strCol, $strCol
+            );
+            // Now add default value set by built-in functions
+            $aSql[] = sprintf(
+                'ALTER TABLE `%s` MODIFY COLUMN `%s` binary(16) not null default UNHEX(SYS_GUID());',
+                $strTable, $strCol
+            );
+        }
+    } else {
+        // Add missing column (probably from future patch)
+        $aSql[] = sprintf(
+            'ALTER TABLE `%s` ADD `%s` binary(16) not null default UNHEX(SYS_GUID());',
+            $strTable, $strCol
+        );
+        // Add index for the new column
+        $aSql[] = sprintf(
+            'CREATE UNIQUE INDEX `%s` ON `%s` (`%s`);',
+            $strCol, $strTable, $strCol
+        );
+    }
+
+    return $aSql;    
+}
+// Installation path prefix
+$osInstPath = dirname(__FILE__, 6);
+$osModUpgDir = str_replace("$osInstPath/", '', __DIR__);
+
 if (php_sapi_name() !== 'cli') {
-    header("Location: sql_upgrade.php"); /* Redirect browser */
+    // Assume someone, somehow tried to access this script using browser
+    $hdrLoc = str_replace($_SERVER['DOCUMENT_ROOT'], '', $osInstPath) . '/sql_upgrade.php';
+    header("Location: $hdrLoc"); /* Redirect browser */
     exit;
 }
 
-// Installation path prefix
-$osInstPath = dirname(__FILE__, 6);
+// Include standard libraries/classes
+require_once("$osInstPath/vendor/autoload.php");
 
-// Setup stuff to avoid errors thrown by globals.php ** Fix This **
-$_GET['site'] = $_POST['site'];
-// Legacy setting when running as command line script
-// need this for output to be readable when running as command line
-$GLOBALS['force_simple_sql_upgrade'] = true;
-// Special map for version field
-$_POST['form_old_version'] = str_replace('_', '.', $_POST['from']);
-$GLOBALS['ongoing_sql_upgrade'] = true;
-
-// Checks if the server's PHP version is compatible with OpenEMR:
-require_once($osInstPath . "/src/Common/Compatibility/Checker.php");
-$response = OpenEMR\Common\Compatibility\Checker::checkPhpVersion();
-if ($response !== true) {
-    die(htmlspecialchars($response));
+// Check arguments
+$scr = $argv[0];
+array_shift($argv);
+$_POST = [
+    'site' => false,
+    'update' => false,
+    'sqlFull' => "$osInstPath/sql/database.sql",
+];
+foreach ($argv as $arg) {
+    $arg = explode('=', $arg);
+    $_POST[$arg[0]] = (count($arg)>1 ? $arg[1] : '');
 }
-
-@ini_set('zlib.output_compression', 0);
-@ini_set('implicit_flush', 1);
-@ini_set('max_execution_time', '0');
-
-$ignoreAuth = true; // no login required
-$sessionAllowWrite = true;
-$GLOBALS['connection_pooling_off'] = true; // force off database connection pooling
-
-require_once("$osInstPath/interface/globals.php");
-require_once("$osInstPath/library/sql_upgrade_fx.php");
-
-use OpenEMR\Common\Uuid\UuidRegistry;
-use OpenEMR\Core\Header;
-use OpenEMR\Services\VersionService;
-
-// Force logging off
-$GLOBALS["enable_auditlog"] = 0;
-
-session_write_close();
-
-echo "<br /><p class='text-success'>Updating UUIDs (this could take some time)<br />\n";
-
-$updateUuidLog = UuidRegistry::populateAllMissingUuids();
-if (!empty($updateUuidLog)) {
-    echo "Updated UUIDs: " . text($updateUuidLog) . "</p><br />\n";
-} else {
-    echo "Did not need to update or add any new UUIDs</p><br />\n";
+if (!($_POST['site'])) {
+    printf('php %s site=x [update=true]%s', $scr, PHP_EOL);
+    die();
 }
+// Is it needed by Installer?
+$objInstaller = new Installer($_POST);
+require_once($objInstaller->conffile);
+// This will open the openemr mysql connection.
+require_once("$osInstPath/library/sql.inc");
+$adb = $GLOBALS['adodb']['db'];
 
-echo "<p class='text-success'>" . xlt("Updating global configuration defaults") . "..." . "</p><br />\n";
-$skipGlobalEvent = true; //use in globals.inc.php script to skip event stuff
-require_once("library/globals.inc.php");
-foreach ($GLOBALS_METADATA as $grpname => $grparr) {
-    foreach ($grparr as $fldid => $fldarr) {
-        list($fldname, $fldtype, $flddef, $flddesc) = $fldarr;
-        if (is_array($fldtype) || (substr($fldtype, 0, 2) !== 'm_')) {
-            $row = sqlQuery("SELECT count(*) AS count FROM globals WHERE gl_name = '$fldid'");
-            if (empty($row['count'])) {
-                sqlStatement("INSERT INTO globals ( gl_name, gl_index, gl_value ) " .
-                    "VALUES ( '$fldid', '0', '$flddef' )");
-            }
-        }
+// Get engine version
+$dbVer = $adb->serverInfo();
+// 15-AUG-2022 - No known plans for UUID functions added in MySQL 8
+if ((strcasecmp($dbVer->version, '8.0.0') < 0) || (stristr($dbVer, 'MariaDB') > 0)) {
+    $chk = $adb->getArray("select UUID_TO_BIN(BIN_TO_UUID(0, false), false) uuid");
+    if (!$chk) {
+        die("DevObj installation check failed.".PHP_EOL);
     }
 }
 
-echo "<p class='text-success'>" . xlt("Updating Access Controls") . "..." . "</p><br />\n";
-require("acl_upgrade.php");
-echo "<br />\n";
-
-$versionService = new VersionService();
-$currentVersion = $versionService->fetch();
-$desiredVersion = $currentVersion;
-$desiredVersion['v_database'] = $v_database;
-$desiredVersion['v_tag'] = $v_tag;
-$desiredVersion['v_realpatch'] = $v_realpatch;
-$desiredVersion['v_patch'] = $v_patch;
-$desiredVersion['v_minor'] = $v_minor;
-$desiredVersion['v_major'] = $v_major;
-
-$canRealPatchBeApplied = $versionService->canRealPatchBeApplied($desiredVersion);
-$line = "Updating version indicators";
-
-if ($canRealPatchBeApplied) {
-    $line = $line . ". " . xlt("Patch was also installed, updating version patch indicator");
+$modeUpdate = ((isset($_POST['update'])) && ($_POST['update'] == 'true'));
+if  (!$modeUpdate) {
+    printf('"update" flag missing. NO updates will be applied.%s', PHP_EOL);
 }
 
-echo "<p class='text-success'>" . $line . "...</p><br />\n";
-$versionService->update($desiredVersion);
-
-echo "<p><p class='text-success'>" . xlt("Database and Access Control upgrade finished.") . "</p></p>\n";
-echo "</div>\n";
+// Scan database.sql for full uuid requirements
+$fSql = new SplFileObject($_POST['sqlFull'], 'r');
+$sqlQueue = [];
+$strTable = '';
+foreach ($fSql as $strSql) {
+    $curMatch = '';
+    if (preg_match('/^\s*CREATE\s+TABLE\s+`(.+)`/', $strSql, $curMatch)) {
+        $strTable = $curMatch[1];
+    } else if (preg_match('/^\s+`(.*uuid.*)`.+binary\(16\)/i', $strSql, $curMatch)) {
+        $ddlSql = ddlColUUID($strTable, $curMatch[1]);
+        if (is_array($ddlSql)) {
+            $sqlQueue = array_merge($sqlQueue, $ddlSql);
+        } else {
+            printf('%s%s', $ddlSql, PHP_EOL);
+        }
+    }
+}
+$adbOK = false;
+foreach ($sqlQueue as $strSql) {
+    if ($modeUpdate) {
+        $adbOK = $adb->execute($strSql);
+    }
+    
+    echo $strSql.($adbOK ? " - OK":'').PHP_EOL;
+}
+echo "Done.".PHP_EOL;
