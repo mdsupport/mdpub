@@ -41,7 +41,7 @@ END$$
 
 DROP TABLE IF EXISTS `dev_obj`$$
 CREATE TABLE `dev_obj` (
-    `uuid` BINARY(16) DEFAULT NULL,
+    `uuid` BINARY(16) NOT NULL DEFAULT UNHEX(SYS_GUID()),
     `obj_type` VARCHAR(10) NOT NULL,
     `obj_id` VARCHAR(255) NOT NULL,
     `obj_version` VARCHAR(10) NOT NULL DEFAULT '' COMMENT 'Reserved for future use',
@@ -56,7 +56,7 @@ ENGINE=InnoDB$$
 
 DROP TABLE IF EXISTS `dev_component`$$
 CREATE TABLE `dev_component` (
-    `uuid` BINARY(16) DEFAULT NULL,
+    `uuid` BINARY(16) NOT NULL DEFAULT UNHEX(SYS_GUID()),
     `obj_type` VARCHAR(10) NOT NULL,
     `obj_id` VARCHAR(255) NOT NULL,
     `obj_version` VARCHAR(10) NOT NULL DEFAULT '',
