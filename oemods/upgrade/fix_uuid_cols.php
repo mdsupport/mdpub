@@ -1,6 +1,6 @@
 <?php
 
-/* Common post-Version upgrade (offline)
+/* Common post-Version upgrade fix for uuid columns (offline)
  *
  * @package OpenEMR
  * @author MD Support <mdsupport@users.sourceforge.net>
@@ -9,6 +9,11 @@
  */
 
 function ddlColUUID($strTable='', $strCol='uuid') {
+    // Exclude uuid* tables used by standard project's registry mechanism
+    if (strncmp($strTable, 'uuid', 4) == 0) {
+        return "Skip $strTable.$strCol - part of uuid registry.";
+    }
+
     $adb = $GLOBALS['adodb']['db'];
 
     // Add column if not exists
@@ -46,42 +51,14 @@ function ddlColUUID($strTable='', $strCol='uuid') {
 
     return $aSql;    
 }
-// Installation path prefix
-$osInstPath = dirname(__FILE__, 6);
-$osModUpgDir = str_replace("$osInstPath/", '', __DIR__);
 
-if (php_sapi_name() !== 'cli') {
-    // Assume someone, somehow tried to access this script using browser
-    $hdrLoc = str_replace($_SERVER['DOCUMENT_ROOT'], '', $osInstPath) . '/sql_upgrade.php';
-    header("Location: $hdrLoc"); /* Redirect browser */
-    exit;
-}
 
-// Include standard libraries/classes
-require_once("$osInstPath/vendor/autoload.php");
+require_once("load_globals.php");
 
-// Check arguments
-$scr = $argv[0];
-array_shift($argv);
-$_POST = [
-    'site' => false,
-    'update' => false,
-    'sqlFull' => "$osInstPath/sql/database.sql",
-];
-foreach ($argv as $arg) {
-    $arg = explode('=', $arg);
-    $_POST[$arg[0]] = (count($arg)>1 ? $arg[1] : '');
-}
-if (!($_POST['site'])) {
-    printf('php %s site=x [update=true]%s', $scr, PHP_EOL);
-    die();
-}
-// Is it needed by Installer?
-$objInstaller = new Installer($_POST);
-require_once($objInstaller->conffile);
-// This will open the openemr mysql connection.
-require_once("$osInstPath/library/sql.inc");
-$adb = $GLOBALS['adodb']['db'];
+// Add default used by this script
+$defaults['sqlFull'] = "$osInstPath/sql/database.sql";
+
+$_POST = array_merge($defaults, $_POST);
 
 // Get engine version
 $dbVer = $adb->serverInfo();
@@ -93,7 +70,6 @@ if ((strcasecmp($dbVer->version, '8.0.0') < 0) || (stristr($dbVer, 'MariaDB') > 
     }
 }
 
-$modeUpdate = ((isset($_POST['update'])) && ($_POST['update'] == 'true'));
 if  (!$modeUpdate) {
     printf('"update" flag missing. NO updates will be applied.%s', PHP_EOL);
 }
