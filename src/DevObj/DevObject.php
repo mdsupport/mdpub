@@ -13,7 +13,7 @@ namespace Mdsupport\Mdpub\DevObj;
 
 class DevObject
 {
-    private $objDevDB;
+    protected $objDevDB;
 
     private $strUuid = '';
     private $rs = [];
@@ -88,13 +88,17 @@ class DevObject
             'where' => $this->rs_keys,
             'return' => 'array'
         ]);
+        // Create record if specified
         if (($recs == false) && ($insert)) {
             $this->strUuid = $this->insert($this->rs_keys);
             return $this->selectUuid();
+        }
+        if ($recs == false) {
+            return false;
         } else {
             $this->rs = $recs[0];
+            return $this->rs[0];
         }
-        return $this->rs[0];
     }
 
     protected function insert($aaDevObj) {

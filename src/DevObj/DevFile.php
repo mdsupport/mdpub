@@ -2,7 +2,7 @@
 /**
  * Extend DevObjects functionality to Files.
  *
- * Copyright (C) 2015-2022 MD Support <mdsupport@users.sourceforge.net>
+ * Copyright (C) 2015-2023 MD Support <mdsupport@users.sourceforge.net>
 *
 * @package   OpenEMR
 * @author    MD Support <mdsupport@users.sourceforge.net>
@@ -14,6 +14,7 @@ namespace Mdsupport\Mdpub\DevObj;
 class DevFile extends DevObject
 {
     private $ws = [];
+    private $DebugMessagesStore = false;
     
     /**
      * File object constructor
@@ -27,7 +28,12 @@ class DevFile extends DevObject
         $this->ws['obj_version'] = $obj_version;
 
         parent::__construct($this->ws);
-        error_log($this->ws['obj_id']);
+        // Check if debugger is enabled
+        $strDebugger = $this->hasDebugger();
+        if ($strDebugger) {
+            require_once ($GLOBALS['fileroot'].$strDebugger);
+            $this->DebugMessagesStore = getDebugMessagesStore();
+        }
     }
 
     /**
@@ -63,7 +69,17 @@ class DevFile extends DevObject
         return $str_file;
     }
 
-    // 
+    /**
+     * Use of inactive DevFile objects is not supported.
+     * 
+     * {@inheritDoc}
+     * @see \Mdsupport\Mdpub\DevObj\DevObject::isActive()
+     */
+    public function isActive()
+    {
+        return parent::isActive();
+    }
+
 /**
  * By default this provides access to commonly used attributes of the files.
  * {@inheritDoc}
@@ -102,9 +118,9 @@ class DevFile extends DevObject
             $matched = true;
             foreach ($aaFilter as $devCompCol => $devCompFilter) {
                 if ($devCompCol == 'comp_json') {
-                    $devCompFilterJson = json_decode($devCompFilter, true);
+                    $devCompFilter = json_decode($devCompFilter, true);
                     $rowColsJson = json_decode($rowCols[$devCompCol], true);
-                    foreach ($devCompFilterJson as $jsonKey => $jsonValue) {
+                    foreach ($devCompFilter as $jsonKey => $jsonValue) {
                         $matched = $matched && ($resDetails[$jsonKey]==$rowColsJson[$jsonKey]);
                     }
                 } else {
@@ -177,6 +193,57 @@ class DevFile extends DevObject
         }
         return $objDevComp;
         // Remove functionality from zsfx.interface.globals.php
+    }
+
+    /**
+     * Automatically initialize debugbar.
+     */
+    private function hasDebugger()
+    {
+        // Individual files need to have setting : debug=true.
+        // Get component for DevObject DevFile of type 'setting'
+        $recDebug = $this->objDevDB->execSql([
+            'sql' => '
+                SELECT scr.obj_id, cls.comp_obj_id debugger
+                FROM dev_component cls
+                INNER JOIN dev_component scr ON scr.obj_type=cls.obj_id AND scr.obj_version=cls.obj_version
+                INNER JOIN dev_obj obj ON scr.obj_type=obj.obj_type AND scr.obj_id=obj.obj_id AND scr.obj_version=obj.obj_version
+            ',
+            'where' => [
+                "cls.obj_type" => 'DevObject',
+                "cls.comp_type" => 'setting',
+                "JSON_EXTRACT(cls.comp_json, '$.type')" => "debug",
+                "scr.comp_type" => 'setting',
+                "JSON_EXTRACT(scr.comp_json, '$.debug')" => "true",
+                "obj.active" => 1,
+            ],
+            'sfx' => '
+                AND scr.obj_type=scr.comp_obj_type
+                AND scr.obj_id=scr.comp_obj_id
+                AND scr.obj_version=scr.comp_obj_version
+            ',
+            'return' => 'array',
+        ]);
+        if (count($recDebug) > 0) {
+            return $recDebug[0]['debugger'];
+        }
+        return false;
+    }
+
+    public function getDebugMessagesStore()
+    {
+        return $this->DebugMessagesStore;
+    }
+
+    /**
+     * Generic debug option without causing any exceptions
+     * @param object $varMsg
+     */
+    public function debug($varMsg)
+    {
+        if ($this->DebugMessagesStore) {
+            $this->DebugMessagesStore->add($varMsg);
+        }
     }
 
     /**
