@@ -6,7 +6,9 @@
     "license": "MIT",
 
     "require" : {
-        "php" : ">=7.4"
+        "php" : ">=7.4",
+		"maximebf/debugbar": ">=1.0.0",
+        "wp-cli/php-cli-tools" : ">=0"
     },
 
     "autoload" : {
