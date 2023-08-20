@@ -69,7 +69,7 @@ class DevDB
      */
     function execSql($aaExec)
     {
-        if ($aaExec['debug']) {
+        if ($aaExec['debug'] ?? false) {
             var_dump($aaExec);
         }
         if ( (!is_array($aaExec)) || (empty($aaExec['sql'])) ) return false;
@@ -87,7 +87,7 @@ class DevDB
             '%s %s %s',
             $aaExec['sql'],
             ($aaExec['params'] ? 'WHERE '.$aaExec['str'] : ''),
-            $aaExec['sfx']
+            ($aaExec['sfx'] ?? '')
         );
 
         // Hardcoded translation since only 3 valid options
