@@ -15,7 +15,23 @@ require_once ('common/sites.php');
 
 use Mdsupport\Mdpub\DevObj\DevDB;
 
-$objSettings = getSettings();
+// Options specific to this script
+$aScriptOptions = [
+    [
+        'arg' => ['zipIn', 'z'],
+        'props' => [
+            'default'     => getcwd().'/Loinc_latest.zip',
+            'description' => 'Set the staged Loinc package archive - Loinc_<version>.zip'
+        ]
+    ],
+];
+
+$objSettings = getSettings($aScriptOptions);
+
+// Require sqlconf.php
+if (empty($objSettings->config)) {
+    exit("Exiting - SQL Configuration not available.".PHP_EOL);
+}
 
 // Validate input package
 if (!file_exists($objSettings->zipIn)) {
@@ -38,19 +54,6 @@ if ($res === TRUE) {
     die ('failed'.PHP_EOL);
 }
 
-// Validate site
-$osSitePath = sprintf('%s/sites/%s', $objSettings->osInstPath, $objSettings->site);
-$configs = getOeSiteConfigs($osSitePath);
-if (count($configs) !== 1) {
-    exit("Exiting - SQL Configuration not available at {$osSitePath}.".PHP_EOL);
-}
-
-// Include standard libraries
-$ignoreAuth = true; // no login required
-$_GET['site'] = array_keys($configs)[0];
-
-require_once("{$objSettings->osInstPath}/interface/globals.php");
-
 // Get details about current setup
 $objDB = new DevDB();
 
@@ -63,16 +66,17 @@ $aaCt = $objDB->execSql([
 // Skipping check to see if codes table has been upgraded.
 
 // Deactivate all current records
-$objDB->execUpdates([
-    'codes' => [
-        'where' => [
-            'code_type' => $aaCt['LOINC'],
-        ],
-        'set' => [
-            'active' => 0,
-        ],
+$objDB->execSql([
+    'sql' => 'update codes set active=0',
+    'where' => [
+        'code_type' => $aaCt['LOINC'],
+        'active' => 1,
     ],
 ]);
+printf('All currently active LOINC records were deactivated.%s', PHP_EOL);
+
+// Gather ids of codes records for reactivation.
+$aReActivateIds = [];
 
 // Begin import
 $ixRow = 0;
@@ -125,16 +129,37 @@ while (($csvCols = fgetcsv($fh)) !== FALSE) {
     ]);
     
     // If no matching source record exists, create a new one else reactivate
-    // DevDB methods not migrated yet
-    $adoDB = $GLOBALS['adodb']['db'];
     if ($rsCodes->recordCount() == 0) {
-        $adoSql = $adoDB->getInsertSql($rsCodes, $codeRec);
+        $adoSql = $objDB->adoMethod('getInsertSql', [$rsCodes, $codeRec]);
     } else {
-        $adoSql = $adoDB->getUpdateSql($rsCodes, $codeRec);
+        // Optimize - since only active column change is expected
+        // $adoSql = $adoDB->getUpdateSql($rsCodes, $codeRec);
+        $recCodes = $rsCodes->fetchRow();
+        if (($codeRec['active'] ?? 0) == 1) {
+            array_push($aReActivateIds, $recCodes['id']);
+        }
     }
     if (!empty($adoSql)) {
-        $adoDB->execute($adoSql);
+        $objDB->adoMethod('execute', [$adoSql]);
     }
-    unset($csvCols);
+    unset($csvCols, $adoSql);
 }
 fclose($fh);
+
+// ReActivate unchanged active records
+$countReactivated = count($aReActivateIds);
+if ($countReactivated > 0) {
+    $aaReActivateIds = array_chunk($aReActivateIds, 1000);
+    foreach ($aaReActivateIds as $aReActivateIds) {
+        $objDB->execSql([
+            'sql' => 'update codes set active=1',
+            'where' => [
+                'active' => 0,
+            ],
+            'sfx' => sprintf(' AND id IN (%s)', implode(',', $aReActivateIds))
+        ]);
+    }
+    printf('%d previously deactivated LOINC records were re-activated.%s', $countReactivated, PHP_EOL);
+}
+
+printf('%s LOINC records were processed from %s.%s', $ixRow, $objSettings->zipIn, PHP_EOL);
