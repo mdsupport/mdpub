@@ -11,6 +11,8 @@
 
 namespace Mdsupport\Mdpub\DevObj;
 
+use Dotenv\Dotenv;
+
 class DevDB
 {
     private $adb = null;
@@ -23,9 +25,7 @@ class DevDB
      */
     function __construct($objInitActs = [])
     {
-        // Store properties
-        // TBD : Remove reliance on OpenEMR $GLOBALS 
-        $this->adb = $GLOBALS['adodb']['db'];
+        $this->setConnection();
 
         foreach ($objInitActs as $iniMethod => $iniMethodParams) {
             if (method_exists($this, $iniMethod)) {
@@ -34,6 +34,78 @@ class DevDB
         }
     }
 
+    /**
+     * Establish ADO Connection
+     * 
+     * @return \ADOConnection object|NULL
+     */
+    private function setConnection() {
+        $connKeySrc = $this->getEnvConnKeySrc();
+        if (count(preg_grep("/^if\.OpenEMR\.db/",array_keys($connKeySrc))) < 4) {
+            return $GLOBALS['adodb']['db'];
+        }
+        $this->adb = adoNewConnection($connKeySrc['if.OpenEMR.dbdriver'] ?? 'mysqli');
+        $boolConnected = $this->adb->connect(
+            $connKeySrc['if.OpenEMR.dbhost'],
+            $connKeySrc['if.OpenEMR.dbuser'],
+            $connKeySrc['if.OpenEMR.dbuser.password'],
+            $connKeySrc['if.OpenEMR.dbname']
+        );
+        
+        return $boolConnected;
+    }
+
+    /**
+     * Get ADO Connection parameters defined in .env
+     *
+     * @return array|NULL
+     */
+    private function getEnvConnKeySrc() {
+        $connKeys = [];
+        // Try getting connection parameters from cahched $_SESSION
+        // For CLI scripts cache will not be available.
+        if (php_sapi_name() == 'cli') {
+            $connKeySrc = &$_ENV;
+        } else {
+            $connKeySrc = &$_SESSION;
+        }
+        $connKeys = preg_grep("/^if\.OpenEMR\.db/",array_keys($connKeySrc));
+        if (count($connKeys) >= 4) {
+            return $connKeySrc;
+        }
+        // Traverse parent nodes for .env file
+        $ix = 1;
+        while (!file_exists(dirname(__FILE__, $ix)."/.env")) {
+            if (dirname(__FILE__, $ix) == dirname(__FILE__, $ix+1)) {
+                return $connKeys;
+            } else {
+                $ix++;
+            }
+        }
+        $dotenv = Dotenv::createImmutable(dirname(__FILE__, $ix));
+        $dotenv->load();
+        if (!empty($_ENV['if.dotenv.alt'])) {
+            // Get local details from .env file stored in user's home directoty
+            // Special path manipulation is needed since Dotenv->create function appends file to project directory
+            $reldir = sprintf(
+                '%s%s',
+                (preg_replace('/(\w+)/', '..', __DIR__)),
+                $_ENV['if.dotenv.alt']
+                );
+            $dotenv = Dotenv::createMutable(__DIR__, $reldir);
+            $dotenv->load();
+            unset($_ENV['if.dotenv.alt']);
+        }
+        if ($connKeySrc !== $_ENV) {
+            // Persist keys in session (if available)
+            $connKeys = preg_grep("/^if\.OpenEMR\.db/",array_keys($_ENV));
+            foreach ($connKeys as $dbkey) {
+                $connKeySrc[$dbkey] = $_ENV[$dbkey];
+            }
+        }
+        return $connKeySrc;
+    }
+    
     private function getExecParams($aaValues, $sqlGlue="=?", $sqlSfx="=?")
     {
         if ((empty($aaValues)) || (!is_array($aaValues)) || (count($aaValues) == 0)) {
@@ -69,7 +141,7 @@ class DevDB
      */
     function execSql($aaExec)
     {
-        if ($aaExec['debug'] ?? false) {
+        if ($aaExec['debug']) {
             var_dump($aaExec);
         }
         if ( (!is_array($aaExec)) || (empty($aaExec['sql'])) ) return false;
@@ -87,7 +159,7 @@ class DevDB
             '%s %s %s',
             $aaExec['sql'],
             ($aaExec['params'] ? 'WHERE '.$aaExec['str'] : ''),
-            ($aaExec['sfx'] ?? '')
+            $aaExec['sfx']
         );
 
         // Hardcoded translation since only 3 valid options
@@ -140,5 +212,24 @@ class DevDB
         // if $transOk is false, commitTrans should call rollbackTrans
         $transOk = $this->adb->commitTrans($transOk);
         return $transOk;
+    }
+   
+    /**
+     * Allow access to ADODB functions
+     * @param array $adoMethodArgs - Assoc array as adoMethod => array of arguments for adoMethod
+     * @return ADODB response.
+     */
+    public function adoMethod($adoMethodArgs)
+    {
+        // Convenience - string with no arguments
+        if (!is_array($adoMethodArgs)) {
+            $adoMethodArgs = [ $adoMethodArgs => [] ];
+        }
+        
+        // $adoMethodArgs should have single key
+        $strMethod = array_key_first($adoMethodArgs);
+        
+        return call_user_func_array([$this->adb, $strMethod], $adoMethodArgs[$strMethod]);
+        
     }
 }
