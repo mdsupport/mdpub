@@ -117,6 +117,16 @@ class DevDB
         }
 
         $sqlFields = array_keys($aaValues);
+        // Convert fields for pattern '->' used for JSON keys
+        foreach ($sqlFields as $ixField => $sqlField) {
+            // Detect JSON-style key: "column->field"
+            if (strpos($sqlField, '->') !== false) {
+                list($colWhere, $jsonField) = explode('->', $sqlField, 2);                    
+                // Build Version B SQL fragment as a STRING
+                $sqlFields[$ixField] = "JSON_UNQUOTE(JSON_EXTRACT($colWhere, '$.$jsonField'))";
+            }
+        }
+        
         $sql = [
             'bind' => array_values($aaValues),
             'str' => implode($sqlGlue,$sqlFields).$sqlSfx,
@@ -141,7 +151,7 @@ class DevDB
      */
     function execSql($aaExec)
     {
-        if ($aaExec['debug']) {
+        if ($aaExec['debug'] ?? false) {
             var_dump($aaExec);
         }
         if ( (!is_array($aaExec)) || (empty($aaExec['sql'])) ) return false;
@@ -159,7 +169,7 @@ class DevDB
             '%s %s %s',
             $aaExec['sql'],
             ($aaExec['params'] ? 'WHERE '.$aaExec['str'] : ''),
-            $aaExec['sfx']
+            ($aaExec['sfx'] ?? '')
         );
 
         // Hardcoded translation since only 3 valid options
