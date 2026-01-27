@@ -188,7 +188,7 @@ class DevFile extends DevObject
                 ]);
             }
         }
-        if ((is_object(objDevComp)) && (!$testMode)) {
+        if ((is_object($objDevComp)) && (!$testMode)) {
             $this->loadDevObjs($objDevComp->get());
         }
         return $objDevComp;
