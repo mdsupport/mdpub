@@ -11,21 +11,21 @@
 
 namespace Mdsupport\Mdpub\Tests\AutoInbox;
 
-class clsInScan extends clsInItem  
+class clsInScan extends clsInItem
 {
-
+    
     function __construct($aOptions = []) {
-      parent::__construct($aOptions);
+        parent::__construct($aOptions);
     }
     
     protected function insertNavItem() {
         return sprintf('
           <li class="nav-item">
-            <a class="nav-link" href="#">%s</a>
+            <a class="nav-link" href="javascript:void(0)">%s</a>
           </li>
         ',
-        'Faxes',
-        );
+            'Faxes',
+            );
     }
     
 }

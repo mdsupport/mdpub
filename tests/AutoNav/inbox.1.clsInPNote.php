@@ -11,27 +11,28 @@
 
 namespace Mdsupport\Mdpub\Tests\AutoInbox;
 
-class clsInPNote extends clsInItem  
+class clsInPNote extends clsInItem
 {
-
+    
     function __construct($aOptions = []) {
-      parent::__construct($aOptions);
+        parent::__construct($aOptions);
     }
-
+    
     protected function insertNavItem() {
+        $id = 'dd_' . uniqid();
         return sprintf('
           <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button"
+            <a class="nav-link dropdown-toggle" href="javascript:void(0)" id="%s" role="button"
               data-fetch="ajax.controller.php?type=messages"
-              data-hover="dropdown" aria-haspopup="true" aria-expanded="false">
+              data-bs-toggle="dropdown" aria-expanded="false">
               %s
             </a>
-            <div class="dropdown-menu" aria-labelledby="navbarDropdown">
-              <a class="dropdown-item" href="messages.php">%s</a>
-            </div>
+            <ul class="dropdown-menu" aria-labelledby="%s">
+              <li><a class="dropdown-item" href="messages.php">%s</a></li>
+            </ul>
           </li>
         ',
-        'Messages', 'Legacy');
+            $id, 'Messages', $id, 'Legacy');
     }
     
 }

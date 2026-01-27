@@ -11,21 +11,21 @@
 
 namespace Mdsupport\Mdpub\Tests\AutoInbox;
 
-class clsInReminder extends clsInItem  
+class clsInReminder extends clsInItem
 {
-
+    
     function __construct($aOptions = []) {
-      parent::__construct($aOptions);
+        parent::__construct($aOptions);
     }
-
+    
     protected function insertNavItem() {
         return sprintf('
           <li class="nav-item">
-            <a class="nav-link" href="#" data-fetch="ajax.controller.php?type=reminders">%s</a>
+            <a class="nav-link" href="javascript:void(0)" data-fetch="ajax.controller.php?type=reminders">%s</a>
           </li>
         ',
-        'Reminders',
-        );
+            'Reminders',
+            );
     }
     
 }

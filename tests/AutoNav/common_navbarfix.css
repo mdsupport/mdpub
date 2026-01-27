@@ -1,13 +1,15 @@
-  .navbar {
-    padding-top: 3px !important;
-    padding-bottom: 3px !important;
-  }
- 
-  .nav-link,
-  .navbar-brand {
-    padding-top: 0 !important;
-    padding-bottom: 0 !important;
-    margin-top: 0 !important;
-    margin-bottom: 0 !important;
- }
- 
+/* Fix for navbar height and spacing */
+.navbar-tight {
+    padding-top: 0.1rem !important;
+    padding-bottom: 0.1rem !important;
+}
+
+.navbar-tight .navbar-brand {
+    padding-top: 0.1rem !important;
+    padding-bottom: 0.1rem !important;
+}
+
+.navbar-tight .nav-link {
+    padding-top: 0.1rem !important;
+    padding-bottom: 0.1rem !important;
+}

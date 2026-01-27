@@ -11,21 +11,21 @@
 
 namespace Mdsupport\Mdpub\Tests\AutoInbox;
 
-class clsInLabs extends clsInItem  
+class clsInLabs extends clsInItem
 {
-
+    
     function __construct($aOptions = []) {
-      parent::__construct($aOptions);
+        parent::__construct($aOptions);
     }
-
+    
     protected function insertNavItem() {
         return sprintf('
           <li class="nav-item">
-            <a class="nav-link" href="#" data-fetch="https://www.open-emr.org/">%s</a>
+            <a class="nav-link" href="javascript:void(0)" data-fetch="https://www.open-emr.org/">%s</a>
           </li>
         ',
-        'Labs',
-        );
+            'Labs',
+            );
     }
     
 }

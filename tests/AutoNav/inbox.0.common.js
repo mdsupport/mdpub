@@ -1,12 +1,3 @@
-/**
- * Dynamic Search for OpenEMR edit_globals.php
- * @package   OpenEMR
- * @link      http://www.open-emr.org
- * @author    MD Support <mdsupport@users.sf.net>
- * @copyright Copyright (c) 2025-2026 MD Support <mdsupport@users.sf.net>
- * @license   https://github.com/openemr/openemr/blob/master/LICENSE GNU General Public License 3
- */
-
 // mdadd helpers
 Element.prototype.swap = function(removeClasses, addClasses) {
     this.classList.remove(...removeClasses);
@@ -35,10 +26,10 @@ Element.prototype.swap = function(removeClasses, addClasses) {
         let doc = document.getElementById('container_div');
         doc.swap(['container', 'mt-2'], ['container-fluid', 'm-0', 'p-0']);
         doc.querySelector('.h1')?.swap(['h1'],['h5','fw-bold']);
-//        doc.querySelector('.navbar-nav').swap([], ['nav-pills', 'nav-justified']);
+        // doc.querySelector('.navbar-nav').swap([], ['nav-pills', 'nav-justified']);
         
         // Set nav-items
-        let navbarUl = doc.querySelector('nav.navbar ul.navbar-nav');
+        let navbarUl = document.querySelector('nav.navbar ul.navbar-nav');
         if (!navbarUl) return;
         
         let navItems = doc.querySelector('#nav-items');
@@ -66,7 +57,7 @@ Element.prototype.swap = function(removeClasses, addClasses) {
             // Ignore hover-triggered dropdown openings
             if (isDropdownToggle && e.detail === 0) return;
 
-            const target = link.dataset.target;
+            const target = link.dataset.inboxTarget;
             const fetchUrl = link.dataset.fetch;
 
             if (target) {
@@ -81,7 +72,7 @@ Element.prototype.swap = function(removeClasses, addClasses) {
             const activePaneId = e.detail.targetId;
 
             // Find the nav-link that points to this pane
-            const activeLink = navbarUl.querySelector(`[data-target="${activePaneId}"]`);
+            const activeLink = navbarUl.querySelector(`[data-inbox-target="${activePaneId}"]`);
             if (!activeLink) return;
 
             const activeItem = activeLink.closest(".nav-item");
@@ -139,9 +130,9 @@ Element.prototype.swap = function(removeClasses, addClasses) {
         // -------------------------------
         // AUTO‑ACTIVATE FIRST TAB
         // -------------------------------
-        const firstLink = navbarUl.querySelector(".nav-item .nav-link[data-target]");
+        const firstLink = navbarUl.querySelector(".nav-item .nav-link[data-inbox-target]");
         if (firstLink) {
-            activateTab(firstLink.dataset.target);
+            activateTab(firstLink.dataset.inboxTarget);
         }
 
     }

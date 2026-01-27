@@ -18,65 +18,65 @@ class clsInItem
     public function __construct() {
         // TBD : Common Inbox Item setup
     }
-
+    
     // Default menu entry
     protected function insertNavItem() {
-        $strNavItem = str_replace(__NAMESPACE__."\\", '', get_class($this));
+        $strNavItem = (new \ReflectionClass($this))->getShortName();
         return sprintf('
           <li class="nav-item">
-            <a class="nav-link" href="#">%s</a>
+            <a class="nav-link" href="javascript:void(0)">%s</a>
           </li>
         ',
-        $strNavItem,
-        );
+            $strNavItem,
+            );
     }
-
+    
     public static function getTypes(bool $forceRefresh = false): array
     {
         if (!$forceRefresh && !empty(self::$aExts)) {
             return self::$aExts;
         }
-
+        
         self::$aExts = []; // reset
-
+        
         $base = static::class;
         $namespace = __NAMESPACE__ . '\\';
-
+        
         foreach (get_declared_classes() as $class) {
-
+            
             // Must be in same namespace
             if (strpos($class, $namespace) !== 0) {
                 continue;
             }
-
+            
             // Must extend this base class
             if (!is_subclass_of($class, $base)) {
                 continue;
             }
-
+            
             // Must match prefix clsIn*
             if (!preg_match('/\\\clsIn[A-Z]/', $class)) {
                 continue;
             }
-
+            
             self::$aExts[] = $class;
         }
-
+        
         return self::$aExts;
     }
-
+    
     public static function callAllTypes(string $method, array $options = [])
     {
         $results = [];
-
+        
         foreach (static::getTypes() as $class) {
             $obj = new $class($options);
-
+            
             if (method_exists($obj, $method)) {
                 $results[$class] = $obj->$method();
             }
         }
-
+        
         return $results;
     }
 }
