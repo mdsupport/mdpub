@@ -101,6 +101,11 @@ class DevFile extends DevObject
         return $aaReturn;
     }
 
+    public function getComponents($aaFilter = [])
+    {
+        return parent::getComponents($aaFilter);
+    }
+    
     public function getResources($aaFilter = [])
     {
         if (empty($aaFilter['comp_type'])) {
