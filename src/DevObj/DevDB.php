@@ -44,7 +44,7 @@ class DevDB
         if (count(preg_grep("/^if\.OpenEMR\.db/",array_keys($connKeySrc))) < 4) {
             return $GLOBALS['adodb']['db'];
         }
-        $this->adb = adoNewConnection($connKeySrc['if.OpenEMR.dbdriver'] ?? 'mysqli');
+        $this->adb = \ADONewConnection($connKeySrc['if.OpenEMR.dbdriver'] ?? 'mysqli');
         $boolConnected = $this->adb->connect(
             $connKeySrc['if.OpenEMR.dbhost'],
             $connKeySrc['if.OpenEMR.dbuser'],
