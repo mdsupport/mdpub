@@ -41,17 +41,32 @@ class DevDB
      */
     private function setConnection() {
         $connKeySrc = $this->getEnvConnKeySrc();
-        if (count(preg_grep("/^if\.OpenEMR\.db/",array_keys($connKeySrc))) < 4) {
+        // WARNING - Deprecated use of $GLOBALS
+        if (isset($GLOBALS['adodb']['db'])) {
             return $GLOBALS['adodb']['db'];
         }
         $this->adb = \ADONewConnection($connKeySrc['if.OpenEMR.dbdriver'] ?? 'mysqli');
-        $boolConnected = $this->adb->connect(
-            $connKeySrc['if.OpenEMR.dbhost'],
-            $connKeySrc['if.OpenEMR.dbuser'],
-            $connKeySrc['if.OpenEMR.dbuser.password'],
-            $connKeySrc['if.OpenEMR.dbname']
-        );
-        
+        $boolConnected = false;
+        // Check password or socket based auth
+        if (strlen($connKeySrc['if.OpenEMR.dbsocket'] ?? '') > 0) {
+            // Ignore host, user, password
+            $boolConnected = $this->adb->connect(
+                'localhost',
+                posix_getpwuid(posix_geteuid())['name'],
+                '',
+                $connKeySrc['if.OpenEMR.dbname'],
+                [
+                    'socket' => $connKeySrc['if.OpenEMR.dbsocket']
+                ],
+            );
+        } else {
+            $boolConnected = $this->adb->connect(
+                $connKeySrc['if.OpenEMR.dbhost'],
+                $connKeySrc['if.OpenEMR.dbuser'],
+                $connKeySrc['if.OpenEMR.dbuser.password'],
+                $connKeySrc['if.OpenEMR.dbname']
+            );
+        }
         return $boolConnected;
     }
 
