@@ -1,6 +1,6 @@
 {
     "name" : "mdsupport/mdpub",
-    "version": "0.0.2",
+    "version": "0.0.3",
     "description" : "Changes to standard OpenEMR",
     "keywords": ["openemr"],
     "type": "library",
