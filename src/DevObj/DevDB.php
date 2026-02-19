@@ -15,7 +15,7 @@ use Dotenv\Dotenv;
 
 class DevDB
 {
-    private $adb = null;
+    protected $adb = null;
 
     /**
      * DevDB constructor caches EMR's connection object
