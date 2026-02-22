@@ -127,7 +127,7 @@ class DevDB
             return [ 
                 'bind' => [],
                 'str' => '',
-                'params' => false
+                '_params' => false
             ];
         }
 
@@ -145,7 +145,7 @@ class DevDB
         $sql = [
             'bind' => array_values($aaValues),
             'str' => implode($sqlGlue,$sqlFields).$sqlSfx,
-            'params' => true
+            '_params' => true
         ];
         return $sql;
     }
@@ -176,20 +176,24 @@ class DevDB
         } elseif (array_key_exists('bind', $aaExec)) {
             $aaExec = array_merge($aaExec, [
                 'str' => '',
-                'params' => false,
+                '_params' => false,
             ]);
         }
         // Construct sql to locate full record as SELECT * FROM tbl WHERE col=? AND col='
         $aaExec['sql'] = sprintf(
             '%s %s %s',
             $aaExec['sql'],
-            ($aaExec['params'] ? 'WHERE '.$aaExec['str'] : ''),
+            (($aaExec['_params'] ?? false) ? 'WHERE '.$aaExec['str'] : ''),
             ($aaExec['sfx'] ?? '')
         );
 
         // Hardcoded translation since only 3 valid options
+        if (!array_key_exists('bind', $aaExec)) {
+            $aaExec['bind'] = [];
+        }
         if (empty($aaExec['return'])) {
             $execResult = $this->adb->execute($aaExec['sql'], $aaExec['bind']);
+            $execResult->_bindings = $aaExec['bind'];
         } elseif ($aaExec['return'] == 'array') {
             $execResult = $this->adb->getArray($aaExec['sql'], $aaExec['bind']);
         } elseif ($aaExec['return'] == 'assoc') {
@@ -213,26 +217,34 @@ class DevDB
 
         $this->adb->beginTrans();
         $transOk = true;
-        foreach ($aaUpdate as $tbl => $upSpecs) {
-            if ((!is_array($upSpecs))
-                || (empty($upSpecs['where'])) 
-                || (empty($upSpecs['set']))
-                || (!is_array($upSpecs['where']))
-                || (!is_array($upSpecs['set']))
-                || (!$transOk)
-            ) {
-                continue;
+        try {
+            foreach ($aaUpdate as $tbl => $upSpecs) {
+                if ((!is_array($upSpecs))
+                    || (empty($upSpecs['where']))
+                    || (empty($upSpecs['set']))
+                    || (!is_array($upSpecs['where']))
+                    || (!is_array($upSpecs['set']))
+                    || (!$transOk))
+                {
+                    continue;
+                }
+                // Construct sql to locate full record as SELECT * FROM tbl WHERE col=? AND col=?'
+                $rsSel = $this->execSql([
+                    'sql' => "SELECT * FROM $tbl",
+                    'where' => $upSpecs['where'],
+                ]);
+                $sqlUpdate = $this->adb->getUpdateSql($rsSel, $upSpecs['set']);
+                
+                // Helper function will filter out unchanged fields
+                if (strlen($sqlUpdate)) {
+                    $transOk = $this->adb->execute($sqlUpdate, $rsSel->_bindings);
+                }
             }
-            // Construct sql to locate full record as SELECT * FROM tbl WHERE col=? AND col=?'
-            $rsSel = $this->execSql([
-                'sql' => "SELECT * FROM $tbl",
-                'where' => $upSpecs['where'],
-            ]);
-            $sqlUpdate = $this->adb->getUpdateSql($rsSel, $upSpecs['set']);
-            // Helper function will filter out unchanged fields
-            if (strlen($sqlUpdate)) {
-                $transOk = $this->adb->execute($sqlUpdate);
-            }
+        } catch (Exception $e) {
+            $this->adb->rollbackTrans();
+            $transOk = false;
+            // Optional: log or expose the error
+            error_log($e->getMessage());
         }
         // if $transOk is false, commitTrans should call rollbackTrans
         $transOk = $this->adb->commitTrans($transOk);
