@@ -215,7 +215,7 @@ class DevDB
     {
         if (!is_array($aaUpdate)) return false;
 
-        $this->adb->beginTrans();
+        $this->adb->StartTrans();
         $transOk = true;
         try {
             foreach ($aaUpdate as $tbl => $upSpecs) {
@@ -241,13 +241,12 @@ class DevDB
                 }
             }
         } catch (Exception $e) {
-            $this->adb->rollbackTrans();
             $transOk = false;
             // Optional: log or expose the error
             error_log($e->getMessage());
         }
-        // if $transOk is false, commitTrans should call rollbackTrans
-        $transOk = $this->adb->commitTrans($transOk);
+        // if $transOk is false, CompleteTrans will force rollback
+        $transOk = $this->adb->CompleteTrans($transOk);
         return $transOk;
     }
    
